@@ -191,5 +191,7 @@ mrb_picoruby_usb_midi_host_gem_init(mrb_state *mrb)
 void
 mrb_picoruby_usb_midi_host_gem_final(mrb_state *mrb)
 {
-    USB_MIDI_HOST_deinit();
+    /* Keep the transport up: the USB host driver task outlives the VM and
+     * still uses the TX queue, and a connected device stays connected
+     * across scripts. */
 }
