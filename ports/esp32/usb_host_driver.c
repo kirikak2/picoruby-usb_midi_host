@@ -49,6 +49,7 @@ typedef struct {
     uint32_t actions;
     uint8_t midi_in_ep;
     uint8_t midi_out_ep;
+    uint16_t midi_in_mps;
     bool is_midi_device;
     uint8_t num_interfaces;
 } class_driver_t;
@@ -316,6 +317,7 @@ static void action_setup_midi(class_driver_t *driver_obj)
                     ESP_LOGI(TAG, "MIDI OUT endpoint: 0x%02x", driver_obj->midi_out_ep);
                 } else {
                     driver_obj->midi_in_ep = ep_desc->bEndpointAddress;
+                    driver_obj->midi_in_mps = USB_EP_DESC_GET_MPS(ep_desc);
                     ESP_LOGI(TAG, "MIDI IN endpoint: 0x%02x", driver_obj->midi_in_ep);
                 }
                 desc_ptr += ep_desc->bLength;
@@ -376,9 +378,20 @@ static void action_setup_midi(class_driver_t *driver_obj)
         ESP_LOGI(TAG, "MIDI IN setup check: midi_in_ep=0x%02x, g_in_transfer=%p",
                  driver_obj->midi_in_ep, (void*)g_in_transfer);
         if (driver_obj->midi_in_ep != 0 && g_in_transfer == NULL) {
-            ESP_LOGI(TAG, "Starting MIDI IN transfer on endpoint 0x%02x",
-                     driver_obj->midi_in_ep);
-            esp_err_t ret = usb_host_transfer_alloc(64, 0, &g_in_transfer);
+            ESP_LOGI(TAG, "Starting MIDI IN transfer on endpoint 0x%02x (MPS %u)",
+                     driver_obj->midi_in_ep, driver_obj->midi_in_mps);
+            /* The host stack requires IN transfer sizes to be a multiple
+             * of the endpoint's MPS. A High-Speed device (e.g. OP-1 field
+             * on the P4's HS host port) has 512-byte bulk endpoints, so a
+             * fixed 64-byte transfer is rejected with ESP_ERR_INVALID_ARG. */
+            size_t in_size = driver_obj->midi_in_mps;
+            if (in_size == 0) {
+                in_size = 64;
+            }
+            while (in_size < 64) {
+                in_size += driver_obj->midi_in_mps;
+            }
+            esp_err_t ret = usb_host_transfer_alloc(in_size, 0, &g_in_transfer);
             if (ret == ESP_OK) {
                 g_in_transfer->device_handle = driver_obj->dev_hdl;
                 g_in_transfer->callback = midi_in_transfer_callback;
@@ -387,7 +400,7 @@ static void action_setup_midi(class_driver_t *driver_obj)
                 /* Roland J-6 may need longer timeout due to complex audio interfaces */
                 g_in_transfer->timeout_ms =
                     (driver_obj->num_interfaces > 2) ? 5000 : 1000;
-                g_in_transfer->num_bytes = 64;
+                g_in_transfer->num_bytes = in_size;
 
                 ret = usb_host_transfer_submit(g_in_transfer);
                 if (ret == ESP_OK) {
@@ -576,6 +589,7 @@ static void action_close_dev(class_driver_t *driver_obj)
     driver_obj->dev_addr = 0;
     driver_obj->midi_in_ep = 0;
     driver_obj->midi_out_ep = 0;
+    driver_obj->midi_in_mps = 0;
     driver_obj->is_midi_device = false;
     driver_obj->num_interfaces = 0;
 
