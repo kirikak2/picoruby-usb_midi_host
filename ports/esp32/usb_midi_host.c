@@ -360,12 +360,6 @@ void USB_MIDI_HOST_notify_disconnected(void)
     /* Set status first to stop new sends */
     g_status = USB_MIDI_HOST_DISCONNECTED;
 
-    /* Stop MIDI clock timer if running */
-    if (MIDI_Clock_is_running()) {
-        ESP_LOGI(TAG, "Stopping MIDI clock timer due to disconnect");
-        MIDI_Clock_stop();
-    }
-
     /* Stop MIDI input task if running */
     if (MIDI_Input_is_running()) {
         ESP_LOGI(TAG, "Stopping MIDI input task due to disconnect");

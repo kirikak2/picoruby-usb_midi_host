@@ -654,10 +654,8 @@ static void process_midi_tx_queue(class_driver_t *driver_obj)
             g_tx_pending_since = 0;
             usb_host_transfer_free(transfer);
             if (ret == ESP_ERR_INVALID_STATE) {
-                /* Disconnect mid-flight - stop MIDI clock + input promptly. */
-                if (MIDI_Clock_is_running()) {
-                    MIDI_Clock_stop();
-                }
+                /* Disconnect mid-flight - stop MIDI input promptly. (The MIDI
+                 * clock is not ours: it goes to whatever it is routed to.) */
                 if (MIDI_Input_is_running()) {
                     MIDI_Input_stop();
                 }
